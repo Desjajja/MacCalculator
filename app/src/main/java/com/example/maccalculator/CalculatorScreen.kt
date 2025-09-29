@@ -1,8 +1,10 @@
 package com.example.maccalculator
 
 import androidx.annotation.DrawableRes
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -34,42 +36,154 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+
+
+//object SizeSpec {
+//    val screenHeight = Configuration().screenHeightDp.dp
+//}
+
+
 
 @Composable
 fun CalculatorScreen(
     modifier: Modifier = Modifier,
     calculatorViewModel: CalculatorViewModel = viewModel(),
 ) {
-    val uiState by calculatorViewModel.state.collectAsState()
+    val uiState by calculatorViewModel.uiState.collectAsState()
 
 
+    BoxWithConstraints (
+        modifier = Modifier
+            .background(color = Color.Green)
+            .fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
 
-    Column(modifier = modifier
-        .width(340.dp)
-        .background(Color(0xff1e1e1e), shape = RoundedCornerShape(16.dp))
-        .padding(8.dp, 16.dp)) {
-        // Your existing display and traffic lights
-        MacOSTrafficLightsWithHover()
-        NumberDisplay(
-            display = uiState.expression.joinToString(""),
-            lastEvaluation = uiState.expressionAfterCompute,
-            modifier = Modifier.padding(horizontal = 8.dp))
-        ButtonGrid(
-            Modifier.padding(horizontal = 16.dp),
-            uiState = uiState,
-            onAction = calculatorViewModel::onAction,
-        )
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(Color(0xff1e1e1e), shape = RoundedCornerShape(16.dp))
+                .padding(8.dp, 16.dp)
+        ) {
+            // Your existing display and traffic lights
+            MacOSTrafficLightsWithHover()
+            Spacer(Modifier.weight(1f))
+            NumberDisplay(
+                display = uiState.expression.joinToString(""),
+                lastEvaluation = uiState.expressionAfterCompute,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 32.dp),
+                onClick = {
+                        calculatorViewModel.toggleHistory()
+                    }
+            )
+            ButtonGrid(
+                Modifier
+                    .fillMaxWidth()
+//                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                uiState = uiState,
+                onAction = calculatorViewModel::onAction,
+            )
         }
 
+//        if (uiState.ifShowHistory) {
+            ComputeHistoryList(
+                screenHeight = maxHeight,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+            )
+//        }
+
+
+    }
         // You would continue adding more Rows for the other buttons (4, 5, 6, etc.)
     }
 
+data class HistoryItem(
+    val expression: String,
+    val result: String
+)
+@Composable
+fun ComputeHistoryList(
+    screenHeight: Dp,
+    viewModel: CalculatorViewModel = viewModel(),
+    modifier: Modifier
+) {
+    val uiState = viewModel.uiState.collectAsState()
+    val animatedHeight: Dp by animateDpAsState(
+        if (uiState.value.ifShowHistory) screenHeight / 2 else 0.dp
+    )
+    val historyItems by viewModel.historyItems.collectAsState()
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(animatedHeight)
+            .background(color = Color(0xff282a2f), shape = RoundedCornerShape(16.dp))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Button(
+                onClick = { viewModel.clearHistory() },
+            ) {
+                Text("Clear")
+            }
+            Button(
+                onClick = { viewModel.toggleHistory() },
+            ) {
+                Text("Done")
+            }
+        }
+        LazyColumn(
+            modifier = Modifier
+                .clickable(enabled = true, onClick = {
+                    viewModel.toggleHistory()
+                })
+//                .background(color = Color.Red, shape = RoundedCornerShape(16.dp))
+        ) {
+            items(historyItems.size) { index ->
+                HistoryItemView(historyItems[index])
+                if (index < historyItems.lastIndex) {
+                    HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                }
+            }
+        }
+
+
+    }
+
+}
+
+@Composable
+fun HistoryItemView(item: HistoryItem) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        Text(text = item.expression, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        Text(text = item.result, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+    }
+}
+
+@Preview
+@Composable
+fun HistoryItemPreview(modifier: Modifier = Modifier) {
+    HistoryItemView(item = HistoryItem("1 + 1", "2"))
+}
 
 
 @Composable
@@ -120,12 +234,14 @@ fun ButtonGrid(
     onAction: (CalculatorAction) -> Unit,
 ) {
     val rowPadding = 2.dp
-    Column(modifier = modifier) {
+    Column(modifier = modifier,
+        verticalArrangement = Arrangement.Bottom) {
+        val rowSpaceModifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = rowPadding)
         // each row contains four buttons
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = rowPadding),
+            modifier = rowSpaceModifier,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             FunctionButton(R.drawable.delete_icon, "Delete", {
@@ -143,9 +259,7 @@ fun ButtonGrid(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = rowPadding),
+            modifier = rowSpaceModifier,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             NumberButton("7", onClick =
@@ -157,9 +271,7 @@ fun ButtonGrid(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = rowPadding),
+            modifier = rowSpaceModifier,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             NumberButton("4", onClick = {onAction(CalculatorAction.Number(4))})
@@ -170,9 +282,7 @@ fun ButtonGrid(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = rowPadding),
+            modifier = rowSpaceModifier,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             NumberButton("1", onClick = {onAction(CalculatorAction.Number(1))})
@@ -183,9 +293,7 @@ fun ButtonGrid(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = rowPadding),
+            modifier = rowSpaceModifier,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             FunctionButton(R.drawable.toggle_sign, "±", onClick = { onAction(CalculatorAction.ToggleSign)})
@@ -193,6 +301,10 @@ fun ButtonGrid(
             OperatorButton(".", { onAction(CalculatorAction.Decimal)})
             OperatorButton("=", { onAction(CalculatorAction.Calculate)})
         }
+
+        Spacer(
+            modifier = rowSpaceModifier.padding(bottom = 16.dp)
+        )
     }
 }
 
@@ -229,7 +341,7 @@ fun CalculatorButton(
 ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = modifier.size(70.dp)
+            modifier = modifier.size(80.dp)
 
         ) {
             Button(
@@ -247,25 +359,27 @@ fun CalculatorButton(
 @Composable
 fun NumberDisplay(display: String,
                   lastEvaluation: String,
-                  modifier: Modifier = Modifier) {
+                  modifier: Modifier = Modifier,
+                  onClick: () -> Unit) {
     // This Text will display the current calculator value.
     Column(
-        modifier,
-        verticalArrangement = Arrangement.Top,
+        modifier = modifier.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.End, // Aligns children horizontally to the end
+        verticalArrangement = Arrangement.Bottom // Aligns children vertically to the bottom
     ) {
         Text(
             text = lastEvaluation,
             color = Color.Gray,
             style = MaterialTheme.typography.displaySmall,
             textAlign = TextAlign.End,
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth()
         )
 
         Text(
             text = display,
             color = Color.White,
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxWidth(), // Make it fill the width
             style = MaterialTheme.typography.displayLarge, // Use a large font
             textAlign = TextAlign.End // Right-align the text
@@ -390,9 +504,15 @@ fun MacButtonIcon(iconType: MacIconType) {
 
 @Preview(showBackground = true, backgroundColor = 0xFFffffff)
 @Composable()
-fun PanelPreview(modifier: Modifier = Modifier.width(340.dp)) {
+fun ScreenPreview(modifier: Modifier = Modifier.fillMaxSize()) {
 //    Panel(Modifier)
     CalculatorScreen(modifier.padding(0.dp))
+}
+
+@Preview
+@Composable
+fun HitoryPreview(modifier: Modifier = Modifier) {
+
 }
 
 @Preview(showBackground = true)
@@ -408,5 +528,5 @@ fun ButtonGridPreview(modifier: Modifier = Modifier) {
 @Preview(showBackground = true, backgroundColor = 0xFFffffff)
 @Composable
 fun NumberDisplayPreview(modifier: Modifier = Modifier) {
-    NumberDisplay("1 + 1", lastEvaluation = "2")
+    NumberDisplay("1 + 1", lastEvaluation = "2", modifier, {})
 }

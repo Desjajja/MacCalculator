@@ -1,9 +1,11 @@
 package com.example.maccalculator
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import java.lang.IllegalArgumentException
 
 // Sealed class to represent all possible calculator actions.
@@ -29,19 +31,26 @@ sealed class CalculatorOperation(val symbol: String) {
 data class CalculatorState(
     val expression: List<String> = listOf("0"),
     val expressionAfterCompute: String = "",
-    val ifShowAllClear: Boolean = true
-//    val lastInputNumber: String = ""
+    val ifShowAllClear: Boolean = true,
+    val ifShowHistory: Boolean = false,
 )
 
 class CalculatorViewModel : ViewModel() {
 
-    private val _state = MutableStateFlow(CalculatorState())
-    val state: StateFlow<CalculatorState> = _state.asStateFlow()
+    private val _uiState = MutableStateFlow(CalculatorState())
+    val uiState: StateFlow<CalculatorState> = _uiState.asStateFlow()
+
+    private val _historyItems = MutableStateFlow<List<HistoryItem>>(emptyList())
+    val historyItems: StateFlow<List<HistoryItem>> = _historyItems.asStateFlow()
 
     private fun List<String>.isLastElementAnOperator(): Boolean {
         val last = this.lastOrNull() ?: return false
         // You can get these symbols from your CalculatorOperation sealed class for better safety
         return last in listOf("+", "-", "×", "÷")
+    }
+
+    fun clearHistory() {
+        _historyItems.value = emptyList()
     }
 
     fun onAction(action: CalculatorAction) {
@@ -57,15 +66,20 @@ class CalculatorViewModel : ViewModel() {
         }
     }
 
+    fun toggleHistory() {
+        _uiState.value = _uiState.value.copy(ifShowHistory = !_uiState.value.ifShowHistory)
+        Log.d("desjajja", "toggleHistory: ${_uiState.value.ifShowHistory}")
+    }
+
     private fun enterNumber(number: String) {
-        if (_state.value.expressionAfterCompute.isNotEmpty()) {
-            _state.value = CalculatorState()
+        if (_uiState.value.expressionAfterCompute.isNotEmpty()) {
+            _uiState.value = CalculatorState()
         }
 
-        val currentList = _state.value.expression.toMutableList()
+        val currentList = _uiState.value.expression.toMutableList()
         if (currentList.size == 1 && currentList[0] == "0") {
             currentList[0] = number
-            _state.value = _state.value.copy(expression = currentList, ifShowAllClear = false)
+            _uiState.value = _uiState.value.copy(expression = currentList, ifShowAllClear = false)
             return
         }
 
@@ -74,23 +88,23 @@ class CalculatorViewModel : ViewModel() {
             val lastElement = currentList.last()
             val newNumber = lastElement + number
             currentList[currentList.size - 1] = newNumber
-            _state.value = _state.value.copy(expression = currentList, ifShowAllClear = false)
+            _uiState.value = _uiState.value.copy(expression = currentList, ifShowAllClear = false)
         } else {
             currentList.add(number)
-            _state.value = _state.value.copy(expression = currentList, ifShowAllClear = false)
+            _uiState.value = _uiState.value.copy(expression = currentList, ifShowAllClear = false)
         }
     }
 
     private fun enterOperation(symbol: String) {
-        if (_state.value.expressionAfterCompute.isNotEmpty()) {
-            _state.value = _state.value.copy(expressionAfterCompute = "")
+        if (_uiState.value.expressionAfterCompute.isNotEmpty()) {
+            _uiState.value = _uiState.value.copy(expressionAfterCompute = "")
         }
-        val currentList = _state.value.expression.toMutableList()
+        val currentList = _uiState.value.expression.toMutableList()
         if (currentList.isEmpty() || (currentList.size == 1 && currentList[0] == "0")) {
             currentList.clear()
             currentList.add("0")
             currentList.add(symbol)
-            _state.value = _state.value.copy(expression = currentList) // No lastInputNumber
+            _uiState.value = _uiState.value.copy(expression = currentList) // No lastInputNumber
             return
         }
 
@@ -101,17 +115,17 @@ class CalculatorViewModel : ViewModel() {
             currentList.add(symbol)
         }
         // No need to set lastInputNumber to "SYMBOL"
-        _state.value = _state.value.copy(expression = currentList)
+        _uiState.value = _uiState.value.copy(expression = currentList)
     }
 
     private fun enterDecimal() {
         // Case 1: Start a new expression after a calculation (=) was pressed.
-        if (_state.value.expressionAfterCompute.isNotEmpty()) {
-            _state.value = CalculatorState(expression = listOf("0."))
+        if (_uiState.value.expressionAfterCompute.isNotEmpty()) {
+            _uiState.value = CalculatorState(expression = listOf("0."))
             return
         }
 
-        val currentList = _state.value.expression.toMutableList()
+        val currentList = _uiState.value.expression.toMutableList()
 
         // We can use the helper function here too for consistency.
         // `!isLastElementAnOperator` covers the case where the last element is a number.
@@ -120,17 +134,17 @@ class CalculatorViewModel : ViewModel() {
             // Only add a decimal if one doesn't already exist.
             if (!lastNumber.contains(".")) {
                 currentList[currentList.size - 1] = "$lastNumber."
-                _state.value = _state.value.copy(expression = currentList)
+                _uiState.value = _uiState.value.copy(expression = currentList)
             }
         } else {
             // Case 2: The last input was an operator, so start a new number.
             currentList.add("0.")
-            _state.value = _state.value.copy(expression = currentList)
+            _uiState.value = _uiState.value.copy(expression = currentList)
         }
     }
 
     private fun performDelete() {
-        val currentList = _state.value.expression.toMutableList()
+        val currentList = _uiState.value.expression.toMutableList()
         if (currentList.size == 1 && currentList[0] == "0") return
 
         val lastItem = currentList.last()
@@ -141,21 +155,21 @@ class CalculatorViewModel : ViewModel() {
         }
 
         if (currentList.isEmpty()) {
-            _state.value = CalculatorState()
+            _uiState.value = CalculatorState()
         } else {
-            _state.value = _state.value.copy(expression = currentList)
+            _uiState.value = _uiState.value.copy(expression = currentList)
         }
     }
 
     private fun performClear() {
         // 1. If the button is already in "All Clear" mode, reset everything and stop.
-        if (_state.value.ifShowAllClear) {
-            _state.value = CalculatorState()
+        if (_uiState.value.ifShowAllClear) {
+            _uiState.value = CalculatorState()
             return // IMPORTANT: Exit the function here.
         }
 
         // 2. This is the "Clear Entry" part (the first press).
-        val currentExpression = _state.value.expression
+        val currentExpression = _uiState.value.expression
         var newExpression = currentExpression
 
         // Only remove the last element if it's a number.
@@ -166,14 +180,14 @@ class CalculatorViewModel : ViewModel() {
         }
 
         // 3. Update the state: use the new expression and set the button to "All Clear" for the next press.
-        _state.value = _state.value.copy(
+        _uiState.value = _uiState.value.copy(
             expression = newExpression,
             ifShowAllClear = true
         )
     }
 
     private fun performCalculation() {
-        val expressionString = _state.value.expression.joinToString("")
+        val expressionString = _uiState.value.expression.joinToString("")
         if (expressionString == "Error") return
         try {
             val result = evaluateExpression(expressionString)
@@ -182,13 +196,19 @@ class CalculatorViewModel : ViewModel() {
             } else {
                 result.toString()
             }
-            _state.value = _state.value.copy(
+            _uiState.value = _uiState.value.copy(
                 expression = listOf(resultString),
                 expressionAfterCompute = expressionString,
                 ifShowAllClear = true
             )
+            _historyItems.update { currentList ->
+                listOf(HistoryItem(expressionString, resultString)) + currentList
+            }
         } catch (_: Exception) {
-            _state.value = _state.value.copy(expression = listOf("Error"))
+            _uiState.value = _uiState.value.copy(expression = listOf("Error"))
+            _historyItems.update { currentList ->
+                listOf(HistoryItem(expressionString, "Error")) + currentList
+            }
         }
     }
 
@@ -242,7 +262,7 @@ class CalculatorViewModel : ViewModel() {
     }
 
     private fun performToggleSign() {
-        val currentList = _state.value.expression.toMutableList()
+        val currentList = _uiState.value.expression.toMutableList()
         val lastElement = currentList.lastOrNull()
         val elementBeforeLastElement = currentList.getOrNull(currentList.size - 2)
 
@@ -259,21 +279,19 @@ class CalculatorViewModel : ViewModel() {
                     "-$lastElement"
                 }
                 currentList[currentList.size - 1] = newNumber
-                _state.value = _state.value.copy(expression = currentList)
+                _uiState.value = _uiState.value.copy(expression = currentList)
             }
         }
     }
 
     private fun performPercentage() {
-        val currentList = _state.value.expression.toMutableList()
+        val currentList = _uiState.value.expression.toMutableList()
         val lastElement = currentList.lastOrNull()
 
         if (lastElement != null && lastElement !in listOf("+", "-", "×", "÷")) {
-//            val value = lastElement.toDoubleOrNull() ?: return
-////            val result = value / 100.0
             val resultString = "$lastElement%"
             currentList[currentList.size - 1] = resultString
-            _state.value = _state.value.copy(expression = currentList)
+            _uiState.value = _uiState.value.copy(expression = currentList)
         }
     }
 }

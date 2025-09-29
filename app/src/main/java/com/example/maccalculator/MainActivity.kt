@@ -27,8 +27,8 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background
             ) {
-            Scaffold(modifier = Modifier.fillMaxSize()) { innerpadding ->
-                CalculatorScreen(modifier = Modifier.padding(innerpadding))
+            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                CalculatorScreen(modifier = Modifier.padding(top = innerPadding.calculateTopPadding()))
             }
             }
         }
